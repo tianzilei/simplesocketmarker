@@ -1,77 +1,90 @@
 import socket
 import threading
 import pyautogui
+import os
+import logging
 
-def handle_client(client_socket, addr):
+logging.basicConfig(level=logging.INFO)
+
+def client_handler(client_socket):
     try:
         while True:
-            # receive and print client messages
-            request = client_socket.recv(1024).decode("utf-8")
-            if request.lower() == "close":
-                client_socket.send("closed".encode("utf-8"))
-                break
-            elif request.lower() == "mark":
-                mark()
-            elif request.lower() == "start":
-                startrec()
-            elif request.lower() == "stop":
-                stoprec()
-            else:
-                cilck(request)
-            print(f"Received: {request}")
-            # convert and send accept response to the client
-            response = "accepted"
-            client_socket.send(response.encode("utf-8"))
+            message_handler(client_socket.recv(1024).decode("utf-8").lower())
+            client_socket.send('received'.encode("utf-8"))
     except Exception as e:
-        print(f"Error when hanlding client: {e}")
+        logging.error(f"Error when handling client: {e}")
     finally:
         client_socket.close()
-        print(f"Connection to client ({addr[0]}:{addr[1]}) closed")
+        logging.info("Connection closed")
 
+def run_server(server_ip, port=8000):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+        try:
+            server.bind((server_ip, port))
+            server.listen()
+            logging.info(f"Listening on {server_ip}:{port}")
+            while True:
+                client_socket, addr = server.accept()
+                logging.info(f"Accepted connection from {addr[0]}:{addr[1]}")
+                thread = threading.Thread(target=client_handler, args=(client_socket,))
+                thread.start()
+        except Exception as e:
+            logging.error(f"Error: {e}")
 
-def run_server():
-    server_ip = "127.0.0.1"  # server hostname or IP address
-    port = 8000  # server port number
-    # create a socket object
+def obtain_ip():
+    ip = socket.gethostbyname(socket.gethostname())
+    if ip.startswith("192.168.1"):
+        return ip
+
+def click(content):
     try:
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # bind the socket to the host and port
-        server.bind((server_ip, port))
-        # listen for incoming connections
-        server.listen()
-        print(f"Listening on {server_ip}:{port}")
-
-        while True:
-            # accept a client connection
-            client_socket, addr = server.accept()
-            print(f"Accepted connection from {addr[0]}:{addr[1]}")
-            # start a new thread to handle the client
-            thread = threading.Thread(target=handle_client, args=(client_socket, addr,))
-            thread.start()
+        pyautogui.click(pyautogui.locateCenterOnScreen(getpicabsdir(content)),
+                        button='left', clicks=1, interval=0.25)
     except Exception as e:
-        print(f"Error: {e}")
-    finally:
-        server.close()
+        logging.error(f"Error: {e}")
 
+def repeatclickuntilreach():
+    while True:
+        try:
+            pyautogui.locateOnScreen(getpicabsdir('confirm'))
+        except:
+            click('flag')
+        else:
+            break
+    markcontent()
+    click('confirm')
 
-def mark():
-    print("marked")
-    # press f12
-    pyautogui.keyDown('f12')
+# def get pic abs dir:
+def getpicabsdir(picname):
+    # judge exist
+    picpath = os.path.join(os.path.abspath('resource'), f'{picname}.png')
+    if os.path.exists(picpath):
+        return picpath
+    else:
+        logging.error(f"Error: {picpath} not exist")
+        return False
 
-def startrec():
-    print("startrec")
-    # press f5
-    pyautogui.keyDown('f8')
+def markcontent():
+    import datetime
+    pyautogui.typewrite(f'{datetime.datetime.now()}')
 
-def stoprec():
-    print("stoprec")
-    # press f6
-    pyautogui.keyDown('f5')
+def message_handler(message):
+    print(f"Received message: {message}")
+    if message == "startrec":
+        pyautogui.keyDown('f8')
+    elif message == "stop":
+        pyautogui.keyDown('f5')
+    elif message == "test":
+        import datetime
+        print(datetime.datetime.now())
+    elif message == "mark":
+        click('flag')
+        repeatclickuntilreach()
 
-def cilck(content):
-    iconpath = f'resource/{content}.png'
-    pyautogui.click(pyautogui.locateCenterOnScreen(iconpath),
-                    button='left', clicks=1, interval=0.25)
+def main():
+    ip = obtain_ip()
+    if ip:
+        run_server(ip)
 
-run_server()
+if __name__ == "__main__":
+    main()
